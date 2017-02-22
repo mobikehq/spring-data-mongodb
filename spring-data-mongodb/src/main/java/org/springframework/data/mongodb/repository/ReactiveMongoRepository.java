@@ -15,16 +15,15 @@
  */
 package org.springframework.data.mongodb.repository;
 
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
 import java.io.Serializable;
 
 import org.reactivestreams.Publisher;
-import org.springframework.data.domain.Example;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.repository.NoRepositoryBean;
-
+import org.springframework.data.repository.query.ReactiveQueryByExampleExecutor;
 import org.springframework.data.repository.reactive.ReactiveSortingRepository;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
 /**
  * Mongo specific {@link org.springframework.data.repository.Repository} interface with reactive support.
@@ -33,7 +32,8 @@ import reactor.core.publisher.Mono;
  * @since 2.0
  */
 @NoRepositoryBean
-public interface ReactiveMongoRepository<T, ID extends Serializable> extends ReactiveSortingRepository<T, ID> {
+public interface ReactiveMongoRepository<T, ID extends Serializable>
+		extends ReactiveSortingRepository<T, ID>, ReactiveQueryByExampleExecutor<T> {
 
 	/**
 	 * Inserts the given entity. Assumes the instance to be new to be able to apply insertion optimizations. Use
@@ -64,15 +64,5 @@ public interface ReactiveMongoRepository<T, ID extends Serializable> extends Rea
 	 * @return the saved entity
 	 */
 	<S extends T> Flux<S> insert(Publisher<S> entities);
-
-	/* (non-Javadoc)
-	 * @see org.springframework.data.repository.query.QueryByExampleExecutor#findAll(org.springframework.data.domain.Example)
-	 */
-	<S extends T> Flux<S> findAll(Example<S> example);
-
-	/* (non-Javadoc)
-	 * @see org.springframework.data.repository.query.QueryByExampleExecutor#findAll(org.springframework.data.domain.Example, org.springframework.data.domain.Sort)
-	 */
-	<S extends T> Flux<S> findAll(Example<S> example, Sort sort);
 
 }

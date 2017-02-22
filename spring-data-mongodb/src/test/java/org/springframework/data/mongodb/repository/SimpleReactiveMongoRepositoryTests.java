@@ -18,10 +18,16 @@ package org.springframework.data.mongodb.repository;
 
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
+import static org.springframework.data.domain.ExampleMatcher.*;
+
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.TestSubscriber;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -32,8 +38,7 @@ import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.BeanFactoryAware;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.data.domain.Sort.Order;
@@ -44,12 +49,6 @@ import org.springframework.data.repository.query.DefaultEvaluationContextProvide
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.util.ClassUtils;
-
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
-import reactor.test.TestSubscriber;
 
 /**
  * Test for {@link ReactiveMongoRepository}.
@@ -422,7 +421,6 @@ public class SimpleReactiveMongoRepositoryTests implements BeanClassLoaderAware,
 		List<ReactivePerson> matthews = repository.findByLastname("Matthews").collectList().block();
 		assertThat(matthews, hasSize(1));
 		assertThat(matthews, contains(oliver));
-
 	}
 
 	@Test // DATAMONGO-1444
@@ -438,7 +436,67 @@ public class SimpleReactiveMongoRepositoryTests implements BeanClassLoaderAware,
 		List<ReactivePerson> matthews = repository.findByLastname("Matthews").collectList().block();
 		assertThat(matthews, hasSize(1));
 		assertThat(matthews, contains(oliver));
+	}
 
+	@Test // DATAMONGO-1619
+	public void findOneByExampleShouldReturnObject() {
+
+		Example<ReactivePerson> example = Example.of(dave);
+
+		TestSubscriber<ReactivePerson> testSubscriber = TestSubscriber.subscribe(repository.findOne(example));
+
+		testSubscriber.await().assertComplete().assertValues(dave);
+	}
+
+	@Test // DATAMONGO-1619
+	public void findAllByExampleShouldReturnObjects() {
+
+		Example<ReactivePerson> example = Example.of(dave, matching().withIgnorePaths("id", "age", "firstname"));
+
+		TestSubscriber<ReactivePerson> testSubscriber = TestSubscriber.subscribe(repository.findAll(example));
+
+		testSubscriber.await().assertComplete().assertValueCount(2);
+	}
+
+	@Test // DATAMONGO-1619
+	public void findAllByExampleAndSortShouldReturnObjects() {
+
+		Example<ReactivePerson> example = Example.of(dave, matching().withIgnorePaths("id", "age", "firstname"));
+
+		TestSubscriber<ReactivePerson> testSubscriber = TestSubscriber
+				.subscribe(repository.findAll(example, new Sort("firstname")));
+
+		testSubscriber.await().assertComplete().assertValues(dave, oliver);
+	}
+
+	@Test // DATAMONGO-1619
+	public void countByExampleShouldCountObjects() {
+
+		Example<ReactivePerson> example = Example.of(dave, matching().withIgnorePaths("id", "age", "firstname"));
+
+		TestSubscriber<Long> testSubscriber = TestSubscriber.subscribe(repository.count(example));
+
+		testSubscriber.await().assertComplete().assertValues(2L);
+	}
+
+	@Test // DATAMONGO-1619
+	public void existsByExampleShouldReturnExisting() {
+
+		Example<ReactivePerson> example = Example.of(dave, matching().withIgnorePaths("id", "age", "firstname"));
+
+		TestSubscriber<Boolean> testSubscriber = TestSubscriber.subscribe(repository.exists(example));
+
+		testSubscriber.await().assertComplete().assertValues(true);
+	}
+
+	@Test // DATAMONGO-1619
+	public void existsByExampleShouldReturnNonExisting() {
+
+		Example<ReactivePerson> example = Example.of(new ReactivePerson("foo", "bar", -1));
+
+		TestSubscriber<Boolean> testSubscriber = TestSubscriber.subscribe(repository.exists(example));
+
+		testSubscriber.await().assertComplete().assertValues(false);
 	}
 
 	interface ReactivePersonRepostitory extends ReactiveMongoRepository<ReactivePerson, String> {
