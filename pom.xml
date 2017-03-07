@@ -23,6 +23,7 @@
 		<module>spring-data-mongodb-cross-store</module>
 		<module>spring-data-mongodb-log4j</module>
 		<module>spring-data-mongodb-distribution</module>
+		<module>spring-data-mongodb-benchmarks</module>
 	</modules>
 
 	<properties>
