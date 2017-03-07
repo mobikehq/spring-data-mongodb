@@ -15,6 +15,7 @@
  */
 package spring.data.mongodb.core.convert;
 
+import com.mongodb.DBObject;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -80,13 +81,16 @@ public class MappingMongoConverterBenchmark extends AbstractMicrobenchmark {
 	}
 
 	@Benchmark
-	public void readObject() {
-		converter.read(Customer.class, plainSource);
+	public Customer readObject() {
+		return converter.read(Customer.class, plainSource);
 	}
 
 	@Benchmark
-	public void writeObject() {
-		converter.write(customer, new BasicDBObject());
+	public DBObject writeObject() {
+		
+		BasicDBObject sink = new BasicDBObject();
+		converter.write(customer, sink);
+		return sink;
 	}
 
 	@Getter
