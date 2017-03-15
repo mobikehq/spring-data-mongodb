@@ -33,7 +33,6 @@ import java.util.Scanner;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import com.mongodb.*;
 import org.bson.Document;
 import org.bson.conversions.Bson;
 import org.bson.types.ObjectId;
@@ -54,7 +53,6 @@ import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.support.PersistenceExceptionTranslator;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.authentication.UserCredentials;
 import org.springframework.data.convert.EntityReader;
 import org.springframework.data.geo.Distance;
 import org.springframework.data.geo.GeoResult;
@@ -111,6 +109,15 @@ import org.springframework.util.ObjectUtils;
 import org.springframework.util.ResourceUtils;
 import org.springframework.util.StringUtils;
 
+import com.mongodb.CommandResult;
+import com.mongodb.Cursor;
+import com.mongodb.DBCollection;
+import com.mongodb.DBCursor;
+import com.mongodb.Mongo;
+import com.mongodb.MongoClient;
+import com.mongodb.MongoException;
+import com.mongodb.ReadPreference;
+import com.mongodb.WriteConcern;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MapReduceIterable;
 import com.mongodb.client.MongoCollection;
@@ -186,20 +193,8 @@ public class MongoTemplate implements MongoOperations, ApplicationContextAware, 
 	 * @param mongo must not be {@literal null}.
 	 * @param databaseName must not be {@literal null} or empty.
 	 */
-	public MongoTemplate(Mongo mongo, String databaseName) {
+	public MongoTemplate(MongoClient mongo, String databaseName) {
 		this(new SimpleMongoDbFactory(mongo, databaseName), null);
-	}
-
-	/**
-	 * Constructor used for a template configuration with user credentials in the form of
-	 * {@link org.springframework.data.authentication.UserCredentials}
-	 *
-	 * @param mongo must not be {@literal null}.
-	 * @param databaseName must not be {@literal null} or empty.
-	 * @param userCredentials
-	 */
-	public MongoTemplate(Mongo mongo, String databaseName, UserCredentials userCredentials) {
-		this(new SimpleMongoDbFactory(mongo, databaseName, userCredentials));
 	}
 
 	/**
@@ -362,8 +357,7 @@ public class MongoTemplate implements MongoOperations, ApplicationContextAware, 
 				FindIterable<Document> cursor = collection.find(mappedQuery).projection(mappedFields);
 				QueryCursorPreparer cursorPreparer = new QueryCursorPreparer(query, entityType);
 
-				ReadDocumentCallback<T> readCallback = new ReadDocumentCallback<T>(mongoConverter, entityType,
-						collectionName);
+				ReadDocumentCallback<T> readCallback = new ReadDocumentCallback<T>(mongoConverter, entityType, collectionName);
 
 				return new CloseableIterableCursorAdapter<T>(cursorPreparer.prepare(cursor), exceptionTranslator, readCallback);
 			}
@@ -1939,7 +1933,7 @@ public class MongoTemplate implements MongoOperations, ApplicationContextAware, 
 	 * @return
 	 */
 	private <T> T executeFindOneInternal(CollectionCallback<Document> collectionCallback,
-										 DocumentCallback<T> objectCallback, String collectionName) {
+			DocumentCallback<T> objectCallback, String collectionName) {
 
 		try {
 			T result = objectCallback
@@ -1969,7 +1963,7 @@ public class MongoTemplate implements MongoOperations, ApplicationContextAware, 
 	 * @return
 	 */
 	private <T> List<T> executeFindMultiInternal(CollectionCallback<FindIterable<Document>> collectionCallback,
-												 CursorPreparer preparer, DocumentCallback<T> objectCallback, String collectionName) {
+			CursorPreparer preparer, DocumentCallback<T> objectCallback, String collectionName) {
 
 		try {
 
@@ -2074,70 +2068,6 @@ public class MongoTemplate implements MongoOperations, ApplicationContextAware, 
 		return entity.getCollection();
 	}
 
-	/**
-	 * Handles {@link WriteResult} errors based on the configured {@link WriteResultChecking}.
-	 *
-	 * @param writeResult
-	 * @param query
-	 * @param operation
-	 */
-	protected void handleAnyWriteResultErrors(WriteResult writeResult, Document query, MongoActionOperation operation) {
-
-		if (writeResultChecking == WriteResultChecking.NONE) {
-			return;
-		}
-
-		String error = ReflectiveWriteResultInvoker.getError(writeResult);
-
-		if (error == null) {
-			return;
-		}
-
-		String message;
-
-		switch (operation) {
-
-			case INSERT:
-			case SAVE:
-				message = String.format("Insert/Save for %s failed: %s", query, error);
-				break;
-			case INSERT_LIST:
-				message = String.format("Insert list failed: %s", error);
-				break;
-			default:
-				message = String.format("Execution of %s%s failed: %s", operation,
-						query == null ? "" : " using query " + query.toString(), error);
-		}
-
-		if (writeResultChecking == WriteResultChecking.EXCEPTION) {
-			throw new MongoDataIntegrityViolationException(message, writeResult, operation);
-		} else {
-			LOGGER.error(message);
-			return;
-		}
-	}
-
-	/**
-	 * Inspects the given {@link CommandResult} for erros and potentially throws an
-	 * {@link InvalidDataAccessApiUsageException} for that error.
-	 *
-	 * @param result must not be {@literal null}.
-	 * @param source must not be {@literal null}.
-	 */
-	private void handleCommandError(CommandResult result, Document source) {
-
-		try {
-			result.throwOnError();
-		} catch (MongoException ex) {
-
-			String error = result.getErrorMessage();
-			error = error == null ? "NO MESSAGE" : error;
-
-			throw new InvalidDataAccessApiUsageException(
-					"Command execution failed:  Error [" + error + "], Command = " + source, ex);
-		}
-	}
-
 	private static final MongoConverter getDefaultMongoConverter(MongoDbFactory factory) {
 
 		DbRefResolver dbRefResolver = new DefaultDbRefResolver(factory);
@@ -2176,8 +2106,7 @@ public class MongoTemplate implements MongoOperations, ApplicationContextAware, 
 	 * 
 	 * @param ids
 	 * @param documents
-	 * @return
-	 * TODO: Remove for 2.0 and change method signature of {@link #insertDBObjectList(String, List)}.
+	 * @return TODO: Remove for 2.0 and change method signature of {@link #insertDBObjectList(String, List)}.
 	 */
 	private static List<Object> consolidateIdentifiers(List<ObjectId> ids, List<Document> documents) {
 
