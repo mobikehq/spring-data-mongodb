@@ -717,6 +717,72 @@ public class MongoTemplate implements MongoOperations, ApplicationContextAware {
 		GeoCommandStatistics stats = GeoCommandStatistics.from(commandResult);
 		return new GeoResults<T>(result, new Distance(stats.getAverageDistance(), near.getMetric()));
 	}
+	
+
+	public <T> GeoResults<T> superGeoNear(NearQuery near, Class<T> entityClass) {
+		return superGeoNear(near, entityClass, determineCollectionName(entityClass));
+	}
+
+	@SuppressWarnings("unchecked")
+	public <T> GeoResults<T> superGeoNear(NearQuery near, Class<T> entityClass, String collectionName) {
+
+		if (near == null) {
+			throw new InvalidDataAccessApiUsageException("NearQuery must not be null!");
+		}
+
+		if (entityClass == null) {
+			throw new InvalidDataAccessApiUsageException("Entity class must not be null!");
+		}
+
+		String collection = StringUtils.hasText(collectionName) ? collectionName : determineCollectionName(entityClass);
+		DBObject nearDbObject = near.toDBObject();
+
+		BasicDBObject command = new BasicDBObject("superGeoNear", collection);
+		command.putAll(nearDbObject);
+
+		if (nearDbObject.containsField("query")) {
+			DBObject query = (DBObject) nearDbObject.get("query");
+			command.put("query", queryMapper.getMappedObject(query, getPersistentEntity(entityClass)));
+		}
+
+		if (LOGGER.isDebugEnabled()) {
+			LOGGER.debug("Executing geoNear using: {} for class: {} in collection: {}", serializeToJsonSafely(command),
+					entityClass, collectionName);
+		}
+
+		CommandResult commandResult = executeCommand(command, ReadPreference.secondary());
+		List<Object> results = (List<Object>) commandResult.get("results");
+		results = results == null ? Collections.emptyList() : results;
+
+		DbObjectCallback<GeoResult<T>> callback = new GeoNearResultDbObjectCallback<T>(
+				new ReadDbObjectCallback<T>(mongoConverter, entityClass, collectionName), near.getMetric());
+		List<GeoResult<T>> result = new ArrayList<GeoResult<T>>(results.size());
+
+		int index = 0;
+		int elementsToSkip = near.getSkip() != null ? near.getSkip() : 0;
+
+		for (Object element : results) {
+
+			/*
+			 * As MongoDB currently (2.4.4) doesn't support the skipping of elements in near queries
+			 * we skip the elements ourselves to avoid at least the document 2 object mapping overhead.
+			 *
+			 * @see <a href="https://jira.mongodb.org/browse/SERVER-3925">MongoDB Jira: SERVER-3925</a>
+			 */
+			if (index >= elementsToSkip) {
+				result.add(callback.doWith((DBObject) element));
+			}
+			index++;
+		}
+
+		if (elementsToSkip > 0) {
+			// as we skipped some elements we have to calculate the averageDistance ourselves:
+			return new GeoResults<T>(result, near.getMetric());
+		}
+
+		GeoCommandStatistics stats = GeoCommandStatistics.from(commandResult);
+		return new GeoResults<T>(result, new Distance(stats.getAverageDistance(), near.getMetric()));
+	}
 
 	public <T> T findAndModify(Query query, Update update, Class<T> entityClass) {
 		return findAndModify(query, update, new FindAndModifyOptions(), entityClass, determineCollectionName(entityClass));
