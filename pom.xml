@@ -5,7 +5,7 @@
 
 	<groupId>org.springframework.data</groupId>
 	<artifactId>spring-data-mongodb-parent</artifactId>
-	<version>1.10.1.RELEASE</version>
+	<version>1.10.1.b1</version>
 	<packaging>pom</packaging>
 
 	<name>Spring Data MongoDB</name>
@@ -29,7 +29,7 @@
 		<project.type>multi</project.type>
 		<dist.id>spring-data-mongodb</dist.id>
 		<springdata.commons>1.13.1.RELEASE</springdata.commons>
-		<mongo>2.14.3</mongo>
+		<mongo>2.14.3-m1</mongo>
 		<mongo.osgi>2.13.0</mongo.osgi>
 	</properties>
 
